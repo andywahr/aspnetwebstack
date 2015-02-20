@@ -109,7 +109,6 @@ namespace System.Web.Http.Controllers
 
             private StandardActionSelectionCache _standardActions;
 
-            [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Maintainability", "CA1502:AvoidExcessiveComplexity", Justification = "Because")]
             public ActionSelectorCacheItem(HttpControllerDescriptor controllerDescriptor)
             {
                 Contract.Assert(controllerDescriptor != null);
@@ -119,40 +118,6 @@ namespace System.Web.Http.Controllers
 
                 MethodInfo[] allMethods = _controllerDescriptor.ControllerType.GetMethods(BindingFlags.Instance | BindingFlags.Public);
                 MethodInfo[] validMethods = Array.FindAll(allMethods, IsValidActionMethod);
-
-                // andywahr:  Added to filter up duplicates showing up based on inheritence, defering to the version
-                //            found declared in the controller being called
-
-                if (validMethods.Length > 0)
-                {
-                    var query = validMethods.GroupBy(validMethod => validMethod.Name)
-                                                    .Where(g => g.Count() > 1)
-                                                    .Select(y => y.Key)
-                                                    .ToList();
-
-                    if (query.Any())
-                    {
-                        List<MethodInfo> keepMe = new List<MethodInfo>();
-
-                        foreach (var method in validMethods)
-                        {
-                            if (query.Any(name => name.Equals(method.Name)))
-                            {
-                                if (method.DeclaringType.Equals(controllerDescriptor.ControllerType))
-                                {
-                                    keepMe.Add(method);
-                                }
-                            }
-                            else
-                            {
-                                keepMe.Add(method);
-                            }
-                        }
-                        validMethods = keepMe.ToArray();
-                    }
-                }
-
-                // end of andywahr changes
 
                 _combinedCandidateActions = new CandidateAction[validMethods.Length];
                 for (int i = 0; i < validMethods.Length; i++)
