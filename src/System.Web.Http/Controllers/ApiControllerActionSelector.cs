@@ -109,6 +109,7 @@ namespace System.Web.Http.Controllers
 
             private StandardActionSelectionCache _standardActions;
 
+            [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Maintainability", "CA1502:AvoidExcessiveComplexity", Justification = "Because")]
             public ActionSelectorCacheItem(HttpControllerDescriptor controllerDescriptor)
             {
                 Contract.Assert(controllerDescriptor != null);
@@ -118,6 +119,40 @@ namespace System.Web.Http.Controllers
 
                 MethodInfo[] allMethods = _controllerDescriptor.ControllerType.GetMethods(BindingFlags.Instance | BindingFlags.Public);
                 MethodInfo[] validMethods = Array.FindAll(allMethods, IsValidActionMethod);
+
+                // andywahr:  Added to filter up duplicates showing up based on inheritence, defering to the version
+                //            found declared in the controller being called
+
+                if (validMethods.Length > 0)
+                {
+                    var query = validMethods.GroupBy(validMethod => validMethod.Name)
+                                                    .Where(g => g.Count() > 1)
+                                                    .Select(y => y.Key)
+                                                    .ToList();
+
+                    if (query.Any())
+                    {
+                        List<MethodInfo> keepMe = new List<MethodInfo>();
+
+                        foreach (var method in validMethods)
+                        {
+                            if (query.Any(name => name.Equals(method.Name)))
+                            {
+                                if (method.DeclaringType.Equals(controllerDescriptor.ControllerType))
+                                {
+                                    keepMe.Add(method);
+                                }
+                            }
+                            else
+                            {
+                                keepMe.Add(method);
+                            }
+                        }
+                        validMethods = keepMe.ToArray();
+                    }
+                }
+
+                // end of andywahr changes
 
                 _combinedCandidateActions = new CandidateAction[validMethods.Length];
                 for (int i = 0; i < validMethods.Length; i++)
@@ -138,7 +173,7 @@ namespace System.Web.Http.Controllers
                             .Select(binding => binding.Descriptor.Prefix ?? binding.Descriptor.ParameterName).ToArray());
                 }
 
-                _combinedActionNameMapping = 
+                _combinedActionNameMapping =
                     _combinedCandidateActions
                     .Select(c => c.ActionDescriptor)
                     .ToLookup(actionDesc => actionDesc.ActionName, StringComparer.OrdinalIgnoreCase);
@@ -190,7 +225,7 @@ namespace System.Web.Http.Controllers
                     standardActions.StandardCandidateActions = standardCandidateActions.ToArray();
                 }
 
-                standardActions.StandardActionNameMapping = 
+                standardActions.StandardActionNameMapping =
                     standardActions.StandardCandidateActions
                     .Select(c => c.ActionDescriptor)
                     .ToLookup(actionDesc => actionDesc.ActionName, StringComparer.OrdinalIgnoreCase);
@@ -209,8 +244,8 @@ namespace System.Web.Http.Controllers
             public HttpActionDescriptor SelectAction(HttpControllerContext controllerContext)
             {
                 InitializeStandardActions();
-                
-                List<CandidateActionWithParams> selectedCandidates = FindMatchingActions(controllerContext); 
+
+                List<CandidateActionWithParams> selectedCandidates = FindMatchingActions(controllerContext);
 
                 switch (selectedCandidates.Count)
                 {
@@ -231,7 +266,7 @@ namespace System.Web.Http.Controllers
             {
                 controllerContext.RouteData = selectedCandidate.RouteDataSource;
             }
-                        
+
             // Find all actionsByVerb on this controller that match the request. 
             // if ignoreVerbs = true, then don't filter actionsByVerb based on mismatching Http verb. This is useful for detecting 404/405. 
             private List<CandidateActionWithParams> FindMatchingActions(HttpControllerContext controllerContext, bool ignoreVerbs = false)
@@ -239,10 +274,19 @@ namespace System.Web.Http.Controllers
                 // If matched with direct route?
                 IHttpRouteData routeData = controllerContext.RouteData;
                 IEnumerable<IHttpRouteData> subRoutes = routeData.GetSubRoutes();
-                                
-                IEnumerable<CandidateActionWithParams> actionsWithParameters = (subRoutes == null) ? 
-                    GetInitialCandidateWithParameterListForRegularRoutes(controllerContext, ignoreVerbs) :
-                    GetInitialCandidateWithParameterListForDirectRoutes(controllerContext, subRoutes, ignoreVerbs);
+
+                IEnumerable<CandidateActionWithParams> actionsWithParameters = (subRoutes == null)
+                    ? GetInitialCandidateWithParameterListForRegularRoutes(controllerContext, ignoreVerbs)
+                    : GetInitialCandidateWithParameterListForDirectRoutes(controllerContext, subRoutes, ignoreVerbs);
+
+                // andywahr: added filter to ensure if multiple actions are returned (in an inherited case) the actions are filtered to the controller already selected
+
+                if (actionsWithParameters.Count() > 1)
+                {
+                    actionsWithParameters = actionsWithParameters.Where(candidate => candidate.ActionDescriptor.ControllerDescriptor.ControllerType.Equals(controllerContext.ControllerDescriptor.ControllerType));
+                }
+
+                // end of andywahr changes
 
                 // Make sure the action parameter matches the route and query parameters.
                 List<CandidateActionWithParams> actionsFoundByParams = FindActionMatchRequiredRouteAndQueryParameters(actionsWithParameters);

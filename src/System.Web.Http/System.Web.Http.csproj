@@ -124,6 +124,7 @@
     <Compile Include="Controllers\IControllerConfiguration.cs" />
     <Compile Include="Description\ResponseTypeAttribute.cs" />
     <Compile Include="Description\ResponseDescription.cs" />
+    <Compile Include="Dispatcher\NamespaceHttpControllerSelector.cs" />
     <Compile Include="EmptyReadOnlyDictionary.cs" />
     <Compile Include="ExceptionHandling\CompositeExceptionLogger.cs" />
     <Compile Include="ExceptionHandling\ExceptionContextCatchBlock.cs" />
